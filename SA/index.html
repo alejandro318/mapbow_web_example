@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Routing Simulator Application</title>
+<meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+<link href="https://api.mapbox.com/mapbox-gl-js/v2.6.1/mapbox-gl.css" rel="stylesheet">
+<link href="resources/style.css" rel="stylesheet">
+
+<script src="https://api.mapbox.com/mapbox-gl-js/v2.6.1/mapbox-gl.js"></script>
+
+</head>
+<body>
+<script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-directions/v4.1.0/mapbox-gl-directions.js"></script>
+<script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v4.7.2/mapbox-gl-geocoder.min.js"></script>
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+
+<link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v4.7.2/mapbox-gl-geocoder.css" type="text/css">
+
+<div id='mainContainer'>
+    <h2>Routing Simulator Application</h2>
+    <div class='item' id='content'>
+    Instructions:
+    <li>Type and choose a place in the Origin field on the top right of the map. The application can detect your current position by enabling the control "Allow Browser location detection".</li>
+    <li>Type and choose a place in the Destination field on the top right of the map.</li>
+    <li>As soon as Origin and Destination are chosen, the animation will start automatically.</li>
+    <li>Once the animation starts, the ETA and Destination are calculated automatically and shown on the top left of the map.</li>
+    <li>Along the "trip", the application will show Fast Food Restaurants, Restaurants, Libraries, Bakeries, Guest Houses or Hotels nearer than 500 from the "current" position (simulated).</li>
+    </div>
+    <br><br>
+    Allow Browser location detection 
+    <label class="switch">
+  		<input type="checkbox" id='GPSButton'>
+  		
+  		<span class="slider round"></span>
+		</label>
+		
+
+    <div class='item' id='map'>
+		  
+			
+			<div class="messages" >
+				<b>ETA:</b><div id="eta">--:--</div>
+				<b>Distance to destination:</b><div id="distance">--.---</div>
+				<b>Message:</b><div id="message"> -- </div>
+			</div>   	
+    </div>    
+</div>
+<script>
+//  	mapboxgl.accessToken = 'pk.eyJ1IjoiYWxlamFuZHJvMzE4IiwiYSI6ImNrcWpiZGtzajBkdjUyb3BxZ2htbGI0MDgifQ.UelmfN0l5Je7UUBKq_GC1A';
+  	mapboxgl.accessToken = 'pk.eyJ1IjoiYWxlamFuZHJvMzE4IiwiYSI6ImNrcWp0a2dlOTBhZm0ycXBoaWx6djFqdjkifQ.TpNYB6Pd4X6fXMnuFCVz1w'; 	
+    const map = new mapboxgl.Map({
+        container: 'map',
+        style: 'mapbox://styles/mapbox/streets-v11',
+        center: [11.3737728, 48.1263616],
+        zoom: 13
+    });
+
+    /*
+    map.addControl(
+        new MapboxDirections({
+            accessToken: mapboxgl.accessToken
+        }),
+        'top-left'
+    );
+    */
+    
+    
+    var pointers = 0;
+    var places = Array();
+    
+    const geocoderA = new MapboxGeocoder({
+		  placeholder: 'Origin',
+			accessToken: mapboxgl.accessToken,
+			marker: {
+			color: 'orange'
+			},
+			mapboxgl: mapboxgl
+		});
+		map.addControl(geocoderA);
+
+		const geocoderB = new MapboxGeocoder({
+    placeholder: 'Destination',
+		accessToken: mapboxgl.accessToken,
+		marker: {
+			color: 'blue',
+			draggable: true
+		},
+		mapboxgl: mapboxgl
+		});
+		 
+		 
+		
+		map.addControl(geocoderB);
+    
+    
+    geocoderA.on('result', (event) => {
+
+				places[0] =  event.result.center[0]+","+ event.result.center[1];
+				console.log("onReturnA: "+ places[0]);
+        pointers++;
+        getRoute(pointers);
+		  });
+		  
+		geocoderA.on('clear', (event) => {
+
+				console.log("onReturnA");
+				pointers--;
+				
+				document.getElementById("message").innerHTML = "Set the Origin";
+				getRoute(pointers);
+				
+
+		  });
+		  
+    
+    geocoderB.on('result', (event) => {
+        places[1] =  event.result.center[0]+","+ event.result.center[1];
+				console.log("onReturnA: "+ places[1]);
+				pointers++;
+				getRoute(pointers);
+
+		  });
+		  
+		  geocoderB.on('clear', (event) => {
+		    //map.getSource('single-point').setData(event.result.geometry);
+				console.log("onReturnB");
+				pointers--;
+				document.getElementById("message").innerHTML = "Set the Destination";
+				getRoute(pointers);
+
+		  });
+    
+    
+    function getRoute(pointers) {
+    		
+    		if(pointers==2)
+    		{
+    			var directionsURL = "https://api.mapbox.com/directions/v5/mapbox/driving/"+places[0]+";"+places[1]+"?geometries=geojson&access_token="+mapboxgl.accessToken;
+    			//console.log(directionsURL);
+ 
+					var request = new Request(directionsURL);
+
+					fetch(request)
+					.then(response => response.json())
+					.then(directionsJson => {
+
+						const obj =JSON.parse(JSON.stringify(directionsJson))
+						
+						
+            console.log(obj.routes[0].distance);
+            console.log(obj.routes[0].duration);
+						console.log(obj.routes[0].geometry.coordinates);
+						
+						var distance = obj.routes[0].distance;
+						var eta = obj.routes[0].duration;
+						document.getElementById("distance").innerHTML=eta;
+						document.getElementById("eta").innerHTML=eta;
+						
+						var origin = obj.routes[0].geometry.coordinates[0];
+
+						const route = {
+								'type': 'Feature',
+								'properties': {},
+								'geometry': {
+									'type': 'LineString',
+									'coordinates': 
+										obj.routes[0].geometry.coordinates
+									
+								}
+							};
+					
+					
+					
+						map.addSource('route', {
+							'type': 'geojson',
+							'data': route
+						});
+						
+						map.addLayer({
+							'id': 'route',
+							'type': 'line',
+							'source': 'route',
+							'layout': {
+								'line-join': 'round',
+								'line-cap': 'round'
+							},
+							'paint': {
+								'line-color': '#4264fb',
+								'line-width': 5
+							}
+						});
+						
+						
+						//Layers for animation
+						const point = {
+							'type': 'FeatureCollection',
+							'features': [
+							{
+							'type': 'Feature',
+							'properties': {},
+							'geometry': {
+							'type': 'Point',
+							'coordinates': origin
+							}
+							}
+							]
+						};
+						
+						
+						map.addSource('point', {
+							'type': 'geojson',
+							'data': point
+						});
+						
+						map.addLayer({
+							'id': 'point',
+							'source': 'point',
+							'type': 'symbol',
+							'layout': {
+							// This icon is a part of the Mapbox Streets style.
+							// To view all images available in a Mapbox style, open
+							// the style in Mapbox Studio and click the "Images" tab.
+							// To add a new image to the style at runtime see
+							// https://docs.mapbox.com/mapbox-gl-js/example/add-image/
+							'icon-image': 'car-15',
+							'icon-rotate': ['get', 'bearing'],
+							'icon-rotation-alignment': 'map',
+							'icon-allow-overlap': true,
+							'icon-ignore-placement': true
+							}
+						});
+						
+						const arc = [];
+						var counter = 0;	  
+						const steps = 5000;
+						//console.log(route);
+						const lineDistance = turf.length(route);
+						// Draw an arc between the `origin` & `destination` of the two points
+						for (let i = 0; i < lineDistance; i += lineDistance / steps) {
+						
+							const segment = turf.along(route, i);
+							arc.push(segment.geometry.coordinates);
+						}
+						 
+						// Update the route with calculated arc coordinates
+						route.geometry.coordinates = arc;
+						animate();
+						
+						
+						//Animate function
+						function animate() {
+
+							
+							
+							const point = {
+								'type': 'FeatureCollection',
+								'features': [
+									{
+										'type': 'Feature',
+										'properties': {},
+										'geometry': {
+											'type': 'Point',
+											'coordinates': origin
+										}
+									}
+								]
+							};
+								
+							//console.log(route);			
+							const start =
+							route.geometry.coordinates[
+								counter >= steps ? counter - 1 : counter
+							];
+							const end =
+							route.geometry.coordinates[
+							counter >= steps ? counter : counter + 1
+							];
+							if (!start || !end) return;
+							 
+							// Update point geometry to a new position based on counter denoting
+							// the index to access the arc
+							point.features[0].geometry.coordinates = route.geometry.coordinates[counter];
+							 
+							// Calculate the bearing to ensure the icon is rotated to match the route arc
+							// The bearing is calculated between the current point and the next point, except
+							// at the end of the arc, which uses the previous point and the current point
+							point.features[0].properties.bearing = turf.bearing(
+							turf.point(start),
+							turf.point(end)
+							);
+							 
+							// Update the source with this new data
+							map.getSource('point').setData(point);
+							
+
+							
+							//We need to show near interesting places to the user
+							if((counter % 200 ) == 0 || counter == 0 )
+							{
+								//console.log(point.features[0].geometry.coordinates);
+								var tilequeryURL = 
+								
+								"https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/"+
+								point.features[0].geometry.coordinates[0]+","+
+								point.features[0].geometry.coordinates[1]+
+								".json?radius=500&access_token="+mapboxgl.accessToken+"&"+
+								"layers=poi_label,building";
+
+								//console.log(tilequeryURL);
+			 
+								var request = new Request(tilequeryURL);
+								document.getElementById("message").innerHTML = "";
+								fetch(request)
+								.then(response => response.json())
+								.then(tilequeryJson => {
+
+									const obj =JSON.parse(JSON.stringify(tilequeryJson));
+									var placeType;
+									var placeName;
+									var placeDist;
+
+									for(var i = 0; i < obj.features.length; i++)
+									{
+						      	console.log(obj.features[i].properties.type);
+						      	placeType = obj.features[i].properties.type;
+						      	placeName = obj.features[i].properties.name;
+						      	placeDist = obj.features[i].properties.tilequery.distance;
+						      	
+
+						      	
+						      	//Library Fast Food Bakery Guest House Restaurant
+						      	if (placeType == "Fast Food" || placeType == "Restaurant" 
+						      	|| placeType == "Library" || placeType == "Food Bakery" || placeType == "Guest House" || placeType == "Hotel")
+						      	{
+						      		
+						      		document.getElementById("message").innerHTML += " The "+placeType+" '"+placeName+"' is "+Math.trunc(placeDist)+" meters  near.<br> ";
+						      	}
+
+						      }
+								});
+								
+				        
+							}
+							
+							
+							map.flyTo({
+									center: point.features[0].geometry.coordinates,
+									essential: true
+								});
+							 
+							// Request the next frame of animation as long as the end has not been reached
+							if (counter < steps) {
+								requestAnimationFrame(animate);
+							}
+							
+							if (counter == steps) {
+								document.getElementById("message").innerHTML = "You've arrived";	
+							}
+							
+							//Look for intersting places near
+							if ((counter % 100) == 0) {
+									
+							}
+							
+							counter = counter + 1;
+							
+							//Update ETA and Distance
+							var stepDistance = distance/steps;
+							var stepETA = eta/steps;
+							
+							stepDistance = (distance/1000) - ((stepDistance*counter)/1000);
+							if (stepDistance < 0) stepDistance = 0; 
+							document.getElementById("distance").innerHTML = stepDistance.toFixed(3) + "km";
+							
+							stepETA = (eta/60) - ((stepETA*counter)/60);
+							if (stepETA < 0) stepETA = 0;
+							document.getElementById("eta").innerHTML = Math.trunc(stepETA) + " min";
+							
+						}
+						
+					})
+					.catch(console.error);
+    		}
+    		else
+    		{
+    			if (map.getLayer('route')) map.removeLayer('route');
+    			if (map.getSource('route')) map.removeSource('route');
+    			
+    			//remove layers for animation
+    			if (map.removeLayer('point')) map.removeLayer('point');
+    			if (map.getSource('point')) map.removeSource('point');
+    		}
+    		
+    		if(pointers < 0)
+    		  pointers = 0;
+    		
+    		
+    		console.log("getRoute "+pointers);
+		}
+    
+    
+    function mapExpand() {
+    	var myMap = document.getElementById('map');
+    	myMap.setAttribute("style", "height:600px");
+   		map.resize(); // ensure the map is rendered after resizing the map element
+		}
+		
+		//Initialize user location
+		var button = document.getElementById('GPSButton');
+		button.onclick = function() 
+		{
+		
+		  if(!GPSButton.checked)
+		    return;
+		  
+		  //mapExpand();
+			
+			if (map.getLayer('route')) map.removeLayer('route');
+      if (map.getSource('route')) map.removeSource('route');
+			
+			var startPos;
+			var geoSuccess = function(position) {
+			
+			  //Get user location
+				startPos = position;
+		  	console.log(startPos.coords.longitude+", "+startPos.coords.latitude);
+				
+				
+				//Move camera abd center map to user location
+				map.flyTo({
+				center: [startPos.coords.longitude,startPos.coords.latitude],
+				essential: true
+				});
+				
+				//Add marker on user location
+				const marker = new mapboxgl.Marker({
+				draggable: true
+				})
+				.setLngLat([startPos.coords.longitude,startPos.coords.latitude])
+				.addTo(map);
+				
+				//Fill geocoder with user location
+				var geoCodingUrl = "https://api.mapbox.com/geocoding/v5/mapbox.places/"+startPos.coords.longitude+","+startPos.coords.latitude+".json?access_token="+mapboxgl.accessToken;
+				console.log(geoCodingUrl);
+				var geoCodingJson = "";
+				
+				var request = new Request(geoCodingUrl);
+				
+				fetch(request)
+					.then(response => response.json())
+					.then(geoCodingJson => {
+
+            console.log(geoCodingJson);
+            const obj =JSON.parse(JSON.stringify(geoCodingJson))
+
+
+						console.log(obj.features[0].place_name);
+						geocoderA.setInput(obj.features[0].place_name);
+						
+						//console.log(obj.features);
+		
+						
+					})
+					.catch(console.error);
+								
+			};
+			
+ 
+
+			
+				
+			var geoError = function(error) {
+				switch(error.code) {
+				  case error.TIMEOUT:
+				    // The user didn't accept the callout
+				    //showNudgeBanner();
+				    break;
+				}
+			};
+
+			navigator.geolocation.getCurrentPosition(geoSuccess, geoError);
+			
+		}; //End Initialize user location
+		
+		
+</script>
+
+</body>
+</html>
